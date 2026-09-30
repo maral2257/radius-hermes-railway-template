@@ -27,7 +27,8 @@ RUN pip install --no-cache-dir \
   "a2a-sdk>=0.3.0" \
   "web3>=6.0.0" \
 "requests>=2.28.0" \
-"ruamel.yaml"
+"ruamel.yaml" \
+"rich"
 
 FROM python:3.11-slim
 
