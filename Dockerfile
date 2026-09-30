@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim
 
 ARG HERMES_GIT_REF=main
 
@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir \
 "ruamel.yaml" \
 "rich"
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
