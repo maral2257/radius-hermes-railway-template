@@ -370,12 +370,13 @@ Safe update workflow: dry-run the intended specialized tool, inspect the diff, s
 | `RADIUS_HOME` | Optional radius-cli home directory. Default: `/data/.hermes/.radius-cli`. |
 | `RADIUS_WALLET_ADDRESS` | Optional explicit wallet address override. Normally auto-derived from radius-cli keystore. |
 | `RADIUS_NETWORK` | Wallet network. Default: `testnet`. |
-| `RADIUS_RPC_URL` | Optional RPC override. Default testnet RPC is `https://rpc.testnet.radiustech.xyz`. |
-| `RADIUS_SBC_ADDRESS` | Optional SBC token address override. |
-| `RADIUS_CHAIN_ID` | Optional chain ID override. Default testnet chain id `72344`. |
-| `RADIUS_EXPLORER_URL` | Optional explorer override. Default `https://testnet.radiustech.xyz`. |
+| `RADIUS_RPC_URL` | Optional RPC override, read by radius-cli. Default: the RPC for `RADIUS_NETWORK`. |
+| `RADIUS_SBC_ADDRESS` | Optional SBC token address override, read by radius-cli. |
+| `RADIUS_CHAIN_ID` | Optional chain ID shown in `radius_tx_status` output. Default: from `RADIUS_NETWORK` (`72344` testnet, `723487` mainnet). |
+| `RADIUS_EXPLORER_URL` | Optional explorer used for tx links. Default: from `RADIUS_NETWORK`. |
 | `RADIUS_CLI_BIN` | Optional radius-cli binary path override. |
 | `RADIUS_AUTO_FUND` | Set to `false` to skip faucet on boot. Default: enabled. |
+| `RADIUS_FAUCET_URL` | Optional faucet API base for the first-boot drip. Default: `https://testnet.radiustech.xyz/api/v1/faucet`. |
 
 The radius-cli keystore is stored under `${RADIUS_HOME}` with restricted permissions and persists across redeploys via the Railway volume.
 
@@ -390,7 +391,7 @@ Once deployed, you can ask the agent:
 - *"What is my wallet address?"*
 - *"Check my Radius wallet balance now."*
 
-The preferred interface is the bundled `radius-cli` plugin tools. The underlying wallet bootstrap/faucet helper scripts live under `/app/scripts/radius/`.
+The preferred interface is the bundled `radius-cli` plugin tools. Boot-time wallet setup and the first-boot faucet drip are done in `scripts/entrypoint.sh` with `radius-cli` (`wallet address`, `wallet export`, `wallet sign`); the image pins radius-cli with the `RADIUS_CLI_VERSION` build arg.
 
 Wallet tool behavior:
 
@@ -639,7 +640,7 @@ hermes pairing list
 2. Writes non-empty env vars to `${HERMES_HOME}/.env`.
 3. Clears empty integer-typed variables from the process environment (prevents `ValueError` in Hermes).
 4. Creates `${HERMES_HOME}/config.yaml` if it doesn't exist.
-5. Initializes Radius wallet if not already done (generates key, calls faucet).
+5. Initializes Radius wallet via radius-cli if not already done (creates the keystore, exports the key for JWT/ERC-8004, signs and requests a faucet drip).
 6. Copies all local `skills/*.md` files to `${HERMES_HOME}/skills/` (overwrites on each boot).
 7. Ensures the managed Radius external directory exists on persistent storage (`RADIUS_SKILLS_DIR`), bootstraps it from `/app/vendor/radius-skills` when empty (optional), scans all upstream skill directories, writes a discovery manifest, registers the derived parent roots as Hermes `skills.external_dirs`, and optionally warns or fails if `EXPECTED_VENDORED_SKILLS` are missing.
 8. Copies bundled plugins from `plugins/*` to `${HERMES_HOME}/plugins/`.
@@ -668,10 +669,12 @@ Make sure you're on a deployment with the updated entrypoint. The template now f
 Verify the Railway volume is mounted at `/data` in your service settings. Without the volume, state is lost on every deploy.
 
 **Radius wallet not initialized**
-Check deploy logs for `[radius]` lines. If wallet initialization appears to have failed, SSH in and run:
+Check deploy logs for `[radius]` and `[bootstrap]` lines. Setup retries on the next boot until it succeeds. To check the wallet by hand, SSH in and run:
 ```bash
-python3 /app/scripts/radius/wallet_init.py
+radius-cli wallet address
+radius-cli wallet balance
 ```
+To re-run first-boot setup (including the faucet drip), delete `${RADIUS_HOME}/initialized` and redeploy.
 
 **Skill not updating after edits**
 Skills now overwrite on every boot. Redeploy after editing any file in `skills/`.
